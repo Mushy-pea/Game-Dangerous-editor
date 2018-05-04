@@ -1,7 +1,7 @@
-﻿/* Game::Dangerous Editor code by Steven Tinsley.You are free to use this software and view its source code. */
-/* If you wish to redistribute it or use it as part of your own work, this is permitted as long as you acknowledge the work is by the abovementioned author. */
+﻿// Game::Dangerous Editor code by Steven Tinsley.  You are free to use this software and view its source code.
+// If you wish to redistribute it or use it as part of your own work, this is permitted as long as you acknowledge the work is by the abovementioned author.
 
-/*This is the C# implementation of the GPLC bytecode generator, designed to be equivalent to Game-Dangerous/assm_gplc.hs but with source code error reporting. */
+//This is the C# implementation of the GPLC bytecode generator, designed to be equivalent to Game-Dangerous/assm_gplc.hs but with source code error reporting.
 
 using System;
 using System.IO;
@@ -20,6 +20,14 @@ namespace Game_Dangerous_Editor
         public List<char> content;
     };
 
+    struct Binding
+    {
+        public string symbol;
+        public int read_index;
+        public int write_index;
+        public int init_value;
+    }
+
     class GPLC_parser
     {
         public List<GPLC_source> Parser(string source_in, int limit)
@@ -29,7 +37,8 @@ namespace Game_Dangerous_Editor
             List<GPLC_source> source_out = new List<GPLC_source>();
             for ( ; ; )
             {
-                next_block = build_sub_block(source_in, i, l, c);
+                if (i > limit) {break;}
+                next_block = Build_sub_block(source_in, i, l, c);
                 source_out.Add(next_block);
                 len = next_block.content.Count;
                 i = i + len;
@@ -40,12 +49,11 @@ namespace Game_Dangerous_Editor
                     l = l + 1;
                 }
                 i++;
-                if (i > limit) {break;}
             }
             return source_out;
         }
 
-        private GPLC_source build_sub_block(string source_in, int i, int l, int c)
+        private GPLC_source Build_sub_block(string source_in, int i, int l, int c)
         {
             List<char> content = new List<char>();
             GPLC_source sub_block = new GPLC_source();
@@ -62,24 +70,83 @@ namespace Game_Dangerous_Editor
         }
     }
 
+class Value_binder
+    {
+        public List<Binding> Bind_values(List<GPLC_source> sub_blocks, int offset)
+        {
+            int i = 0, j, k = 0;
+            string error_detail;
+            List<string> error_log = new List<string>();
+            List<string> fragment = new List<string>();
+            bool success = true;
+            List<Binding> b = new List<Binding>();
+            List<Binding> failure = new List<Binding>();
+            Binding this_b = new Binding();
+            for (j = 0; j < sub_blocks.Count; j = j + 2)
+            {
+                this_b.symbol = string.Join("", sub_blocks[j].content);
+                this_b.read_index = i;
+                this_b.write_index = offset + i;
+                try
+                {
+                    this_b.init_value = Convert.ToInt32(string.Join("", sub_blocks[j + 1].content));
+                }
+                catch (FormatException)
+                {
+                    success = false;
+                    fragment.Add(string.Join("", sub_blocks[j + 1].content));
+                    error_detail = "\nError at line " + Convert.ToString(sub_blocks[j + 1].line) + " column " + Convert.ToString(sub_blocks[j + 1].column) + ".  The second term in a value initialisation must be an integer.  For details of how non - integer arguments are handled see the Op - code arguments section of the GPLC specification.";
+                    error_log.Add(error_detail);
+                }
+                b.Add(this_b);
+                i++;
+            }
+            if (success == false)
+            {
+                foreach (string error in error_log)
+                {
+                    Console.WriteLine("\nfragment: " + fragment[k]);
+                    Console.WriteLine(error);
+                    k++;
+                }
+                return failure;
+            }
+            else { return b; }
+        }
+
+    }
+
     class Program
     {
         static void Main(string[] args)
         {
             string contents;
-            int limit;
-            GPLC_parser t = new GPLC_parser();
-            List<GPLC_source> result;
+            GPLC_parser s = new GPLC_parser();
+            Value_binder t = new Value_binder();
+            List<GPLC_source> source;
+            List<Binding> result;
             contents = System.IO.File.ReadAllText(args[0]);
-            limit = contents.Length;
-            result = t.Parser(contents, limit);
-            Console.WriteLine("\nParser output: \n\n");
-            foreach (GPLC_source sub_block in result) {
-                Console.Write("\n\nline: " + sub_block.line);
-                Console.Write("\ncolumn: " + sub_block.column);
-                Console.Write("\ncontent: " + sub_block.content);
-            };
+            source = s.Parser(contents, contents.Length - 1);
+            result = t.Bind_values(source, Convert.ToInt32(args[1]));
+            foreach (GPLC_source src in source)
+            {
+                Console.WriteLine("\nline: " + src.line);
+                Console.WriteLine("column: " + src.column);
+                Console.WriteLine("content: " + string.Join("", src.content));
+            }
+            if (result.Count == 0) { Console.WriteLine("\nCompilation failed at value binding stage."); }
+            else
+            {
+                foreach (Binding b in result)
+                {
+                    Console.WriteLine("\nSymbol: " + b.symbol);
+                    Console.WriteLine("Read index: " + b.read_index);
+                    Console.WriteLine("Write index: " + b.write_index);
+                    Console.WriteLine("Initial value: " + b.init_value);
+                }
+            }
             Console.ReadLine();
         }
     }
+    
 }

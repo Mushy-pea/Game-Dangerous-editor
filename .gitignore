@@ -16,3 +16,5 @@ Game-Dangerous Editor/Properties/AssemblyInfo.cs
 *.pdb
 *.user
 Game-Dangerous Editor/obj/Debug/Game-Dangerous Editor.csproj.FileListAbsolute.txt
+Game-Dangerous Editor/bin/Debug/test.bak
+Game-Dangerous Editor/bin/Debug/test.gplc
