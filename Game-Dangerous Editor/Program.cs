@@ -8,6 +8,7 @@ using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Game_Dangerous_Editor
@@ -18,7 +19,7 @@ namespace Game_Dangerous_Editor
         public int line;
         public int column;
         public string content;
-    };
+    }
 
     struct Binding
     {
@@ -26,6 +27,28 @@ namespace Game_Dangerous_Editor
         public int read_index;
         public int write_index;
         public int init_value;
+    }
+
+    struct GPLC_program_in
+    {
+        public string prog_name;
+        public List<GPLC_source> sub_blocks;
+        public List<Binding> bs;
+    }
+
+    struct GPLC_program_out
+    {
+
+        public GPLC_program_out(string prog_name_in, List<int> bytecode_in, List<Binding> bs_in)
+        {
+            prog_name = prog_name_in;
+            bytecode = bytecode_in;
+            bs = bs_in;
+        }
+
+        public string prog_name;
+        public List<int> bytecode;
+        public List<Binding> bs;
     }
 
     // The methods of this class are used to transform GPLC opcode arguments to their bytecode form in an error safe way, such that source code errors are handled and user feedback added to the error log.
@@ -57,7 +80,7 @@ namespace Game_Dangerous_Editor
             catch (FormatException)
             {
                 error_detail = "\n\nError at line " + Convert.ToString(sub_block.line) + " column " + Convert.ToString(sub_block.column) + ".  ";
-                if (mode == 0) {error_detail = error_detail + "The second term in a value initialisation must be an integer.  For details of how non - integer arguments are handled see the Op - code arguments section of the GPLC specification."};
+                if (mode == 0) { error_detail = error_detail + "The second term in a value initialisation must be an integer.  For details of how non - integer arguments are handled see the Op - code arguments section of the GPLC specification."; }
                 else { error_detail = error_detail + "This opcode argument must be a literal integer."; }
                 error_log.Add(error_detail);
             }
@@ -69,14 +92,14 @@ namespace Game_Dangerous_Editor
     // This is so it is simple to report the locations of source code errors to the user when they are detected further along the transformation pipeline.
     class GPLC_parser
     {
-        public List<GPLC_source> Parser(string source_in, int limit)
+        public List<GPLC_source> Parser(string source_in)
         {
             int i = 0, l = 0, c = 0, len;
             GPLC_source next_block;
             List<GPLC_source> source_out = new List<GPLC_source>();
             for ( ; ; )
             {
-                if (i > limit) {break;}
+                if (i == source_in.Length) {break;}
                 next_block = Build_sub_block(source_in, i, l, c);
                 source_out.Add(next_block);
                 len = next_block.content.Length;
@@ -103,8 +126,11 @@ namespace Game_Dangerous_Editor
                 i++;
             }
             sub_block.content = string.Join("", content);
-            sub_block.line = l;
-            sub_block.column = c;
+            sub_block.line = l + 1;
+            sub_block.column = c + 1;
+ //           Console.Write("\n\ncontent: " + sub_block.content);
+ //           Console.Write("\nline: " + sub_block.line);
+ //           Console.Write("\ncolumn: " + sub_block.column);
             return sub_block;
         }
     }
@@ -131,17 +157,35 @@ namespace Game_Dangerous_Editor
     }
 
     // The members of this class handle the transformation of GPLC keywords to op - codes and of their reference arguments to the data block offsets used at bytecode level.
-    class Process_opcodes
+    class Gen_bytecode
     {
-        public List<int> Transform_opcode(List<GPLC_source> source, List<Binding> b, List<string> error_log)
+        private List<GPLC_program_out> prog_group;
+
+        public Gen_bytecode()
+        {
+            prog_group = new List<GPLC_program_out>();
+        }
+
+        public GPLC_program_out Get_program_out(int n)
+        {
+            return prog_group[n];
+        }
+
+        public void Check_length()
+        {
+            Console.WriteLine("prog_group length: " + Convert.ToString(prog_group.Count));
+        }
+
+        public void Transform_program(GPLC_program_in prog_in, List<string> error_log)
         {
             int offset = 0, block_size = 0, m, n;
             List<int> sig_block = new List<int>();
             List<int> code_block = new List<int>();
-            List<int> result = new List<int> { 0, 0 };
+            List<GPLC_source> source = prog_in.sub_blocks;
+            List<int> result = new List<int> { 0, 0, 0 };
             string error_detail;
             bool block_start = true;
-            for (m = 0; m < source.Count; )
+            for (m = 0; m < prog_in.sub_blocks.Count; )
             {
                 if (block_start == true && source[m].content != "--signal")
                 {
@@ -169,7 +213,7 @@ namespace Game_Dangerous_Editor
                 {
                     if (source[m].content == "if")
                     {
-                        List<int> this_line = new List<int> { 1, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log), Safe_arg_hdlr.Read_literal(source[m + 4], error_log, 1), Safe_arg_hdlr.Read_literal(source[m + 5], error_log, 1) };
+                        List<int> this_line = new List<int> { 1, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Read_literal(source[m + 4], error_log, 1), Safe_arg_hdlr.Read_literal(source[m + 5], error_log, 1) };
                         code_block.AddRange(this_line);
                         m = m + 6;
                         offset = offset + 6;
@@ -177,7 +221,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "chg_state")
                     {
-                        List<int> this_line = new List<int> { 2, Safe_arg_hdlr.Ref_to_offset(b, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 6], 0, error_log) };
+                        List<int> this_line = new List<int> { 2, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 6], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 7;
                         offset = offset + 7;
@@ -185,7 +229,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "chg_grid")
                     {
-                        List<int> this_line = new List<int> { 3, Safe_arg_hdlr.Ref_to_offset(b, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 6], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 7], 0, error_log) };
+                        List<int> this_line = new List<int> { 3, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 6], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 7], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 8;
                         offset = offset + 8;
@@ -193,7 +237,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "send_signal")
                     {
-                        List<int> this_line = new List<int> { 4, Safe_arg_hdlr.Ref_to_offset(b, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 4], 0, error_log) };
+                        List<int> this_line = new List<int> { 4, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 5;
                         offset = offset + 5;
@@ -201,7 +245,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "chg_value")
                     {
-                        List<int> this_line = new List<int> { 5, Safe_arg_hdlr.Ref_to_offset(b, source[m + 1], 1, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 6], 0, error_log) };
+                        List<int> this_line = new List<int> { 5, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 1, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 6], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 7;
                         offset = offset + 7;
@@ -209,7 +253,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "chg_floor")
                     {
-                        List<int> this_line = new List<int> { 6, Safe_arg_hdlr.Ref_to_offset(b, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 6], 0, error_log) };
+                        List<int> this_line = new List<int> { 6, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 6], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 7;
                         offset = offset + 7;
@@ -217,7 +261,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "chg_ps1")
                     {
-                        List<int> this_line = new List<int> { 7, Safe_arg_hdlr.Ref_to_offset(b, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log) };
+                        List<int> this_line = new List<int> { 7, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 4;
                         offset = offset + 4;
@@ -225,7 +269,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "chg_obj_type")
                     {
-                        List<int> this_line = new List<int> { 8, Safe_arg_hdlr.Ref_to_offset(b, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 4], 0, error_log) };
+                        List<int> this_line = new List<int> { 8, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 5;
                         offset = offset + 5;
@@ -233,7 +277,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "place_hold")
                     {
-                        List<int> this_line = new List<int> { 9, Safe_arg_hdlr.Ref_to_offset(b, source[m + 1], 0, error_log) };
+                        List<int> this_line = new List<int> { 9, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 2;
                         offset = offset + 2;
@@ -241,7 +285,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "chg_grid_")
                     {
-                        List<int> this_line = new List<int> { 10, Safe_arg_hdlr.Ref_to_offset(b, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 6], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 7], 0, error_log) };
+                        List<int> this_line = new List<int> { 10, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 6], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 7], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 8;
                         offset = offset + 8;
@@ -249,7 +293,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "copy_ps1")
                     {
-                        List<int> this_line = new List<int> { 11, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 4], 0, error_log) };
+                        List<int> this_line = new List<int> { 11, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 5;
                         offset = offset + 5;
@@ -257,7 +301,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "copy_lstate")
                     {
-                        List<int> this_line = new List<int> { 12, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 6], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 7], 0, error_log) };
+                        List<int> this_line = new List<int> { 12, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 6], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 7], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 8;
                         offset = offset + 8;
@@ -265,7 +309,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "pass_msg")
                     {
-                        List<int> this_line = new List<int> { 13, Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log)};
+                        List<int> this_line = new List<int> { 13, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log)};
                         for (n = 3; n <= Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1); n++)
                         {
                             this_line.Add(Safe_arg_hdlr.Read_literal(source[m + n], error_log, 1));
@@ -277,7 +321,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "chg_ps0")
                     {
-                        List<int> this_line = new List<int> { 14, Safe_arg_hdlr.Ref_to_offset(b, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log) };
+                        List<int> this_line = new List<int> { 14, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 4;
                         offset = offset + 4;
@@ -285,7 +329,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "copy_ps0")
                     {
-                        List<int> this_line = new List<int> { 15, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 4], 0, error_log) };
+                        List<int> this_line = new List<int> { 15, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 5;
                         offset = offset + 5;
@@ -293,7 +337,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "binary_dice")
                     {
-                        List<int> this_line = new List<int> { 16, Safe_arg_hdlr.Ref_to_offset(b, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 5], 0, error_log), Safe_arg_hdlr.Read_literal(source[m + 6], error_log, 1) };
+                        List<int> this_line = new List<int> { 16, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Read_literal(source[m + 6], error_log, 1) };
                         code_block.AddRange(this_line);
                         m = m + 7;
                         offset = offset + 7;
@@ -301,7 +345,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "project_init")
                     {
-                        List<int> this_line = new List<int> { 17, Safe_arg_hdlr.Ref_to_offset(b, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 6], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 7], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 8], 0, error_log), Safe_arg_hdlr.Read_literal(source[m + 9], error_log, 1), Safe_arg_hdlr.Ref_to_offset(b, source[m + 10], 0, error_log) };
+                        List<int> this_line = new List<int> { 17, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 6], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 7], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 8], 0, error_log), Safe_arg_hdlr.Read_literal(source[m + 9], error_log, 1), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 10], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 11;
                         offset = offset + 11;
@@ -309,7 +353,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "project_update")
                     {
-                        List<int> this_line = new List<int> { 18, Safe_arg_hdlr.Ref_to_offset(b, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 1, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 5], 0, error_log) };
+                        List<int> this_line = new List<int> { 18, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 1, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 6;
                         offset = offset + 6;
@@ -317,7 +361,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "init_npc")
                     {
-                        List<int> this_line = new List<int> { 19, Safe_arg_hdlr.Ref_to_offset(b, source[m + 1], 0, error_log), Safe_arg_hdlr.Read_literal(source[m + 2], error_log, 1) };
+                        List<int> this_line = new List<int> { 19, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Read_literal(source[m + 2], error_log, 1) };
                         code_block.AddRange(this_line);
                         m = m + 3;
                         offset = offset + 3;
@@ -349,7 +393,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (source[m].content == "block")
                     {
-                        List<int> this_line = new List<int> { 5, 0, 0, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(b, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(b, source[m + 4], 0, error_log) };
+                        List<int> this_line = new List<int> { 5, 0, 0, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 5;
                         offset = offset + 7;
@@ -369,48 +413,116 @@ namespace Game_Dangerous_Editor
                     }
                 }
             }
-            result.AddRange(sig_block); result.Add(536870911); result.AddRange(code_block); result.Add(536870911);
-            return (result);
+            List<int> data_block = new List<int>(Add_data_block(prog_in.bs));
+            result.AddRange(sig_block); result.Add(536870911); result.AddRange(code_block); result.Add(536870911); result.AddRange(data_block);
+            result[0] = result.Count - 1;
+            result.Add(result.Count - 1 - data_block.Count);
+            GPLC_program_out this_prog = new GPLC_program_out(prog_in.prog_name, result, prog_in.bs);
+            prog_group.Add(this_prog);
+            Console.WriteLine("Transform_program added to prog_group.  Length: " + Convert.ToString(prog_group.Count));
         }
 
-        private List<int> Add_value_block(List<Binding> b)
+        public List<int> Add_data_block(List<Binding> bs)
         {
-
+            List<int> data_block = new List<int>();
+            foreach (Binding b in bs) { data_block.Add(b.init_value); }
+            return data_block;
         }
-
     }
+
+    
 
     class Program
     {
         static void Main(string[] args)
         {
-            string contents;
+            int m, n = 0, offset;
+            string source, structure;
+            string[] src_blocks, struct_blocks;
+            List<string> error_log = new List<string>();
             GPLC_parser s = new GPLC_parser();
             Value_binder t = new Value_binder();
-            List<GPLC_source> source;
-            List<Binding> result;
-            contents = System.IO.File.ReadAllText(args[0]);
-            source = s.Parser(contents, contents.Length - 1);
-            result = t.Bind_values(source, Convert.ToInt32(args[1]));
-            foreach (GPLC_source src in source)
+            GPLC_program_in this_prog = new GPLC_program_in();
+            List<GPLC_source> temp = new List<GPLC_source>();
+            Gen_bytecode fst_pass = new Gen_bytecode(); Gen_bytecode snd_pass = new Gen_bytecode();
+
+            source = File.ReadAllText(args[0]) + " ";
+            structure = File.ReadAllText(args[1]);
+            src_blocks = Regex.Split(source, "~");
+            struct_blocks = Regex.Split(structure, ", ");
+            foreach (string block in src_blocks)
             {
-                Console.WriteLine("\nline: " + src.line);
-                Console.WriteLine("column: " + src.column);
-                Console.WriteLine("content: " + string.Join("", src.content));
+                Console.Write("\n\n" + Convert.ToString(n) + ": " + block);
+                n++;
             }
-            if (result.Count == 0) { Console.WriteLine("\nCompilation failed at value binding stage."); }
-            else
-            {
-                foreach (Binding b in result)
+            for (m = 0; m < 2; m++) {
+                n = 0;
+                foreach (string block in src_blocks)
                 {
-                    Console.WriteLine("\nSymbol: " + b.symbol);
-                    Console.WriteLine("Read index: " + b.read_index);
-                    Console.WriteLine("Write index: " + b.write_index);
-                    Console.WriteLine("Initial value: " + b.init_value);
+                    if (n % 3 == 0) { this_prog.prog_name = block; }
+                    else if (n % 3 == 1)
+                    {
+                        temp = s.Parser(block);
+                        if (m == 0)
+                        {
+                            this_prog.bs = t.Bind_values(temp, 0, error_log);
+                            if (error_log.Count > 0)
+                            {
+                                report_error(error_log);
+                                Console.Write("\n\nCompilation failed at value binding stage.");
+                                Environment.Exit(0);
+                            }
+                        }
+                        else
+                        {
+                            offset = fst_pass.Get_program_out(n / 3).bytecode.Last();
+                            this_prog.bs = t.Bind_values(temp, offset, error_log);
+                        }
+                    }
+                    else
+                    {
+                        this_prog.sub_blocks = s.Parser(block);
+                        if (m == 0)
+                        {
+                            fst_pass.Transform_program(this_prog, error_log);
+                            Console.WriteLine("fst_pass.Transform_program called.");
+                            if (error_log.Count > 0)
+                            {
+                                report_error(error_log);
+                                Console.Write("\n\nCompilation failed at code block transformation stage.");
+                                Environment.Exit(0);
+                            }
+                        }
+                        else
+                        {
+                            snd_pass.Transform_program(this_prog, error_log);
+                        }
+                    }
+                    n++;
                 }
             }
-            Console.ReadLine();
+            fst_pass.Check_length();
+            snd_pass.Check_length();
+            Console.Write("\nEnter the number of the program you wish to view: ");
+            string choice = Console.ReadLine();
+            GPLC_program_out prog_out = snd_pass.Get_program_out(Convert.ToInt32(choice));
+            Console.Write("\nOutput: " + show_ints(prog_out.bytecode));
+            
+
         }
+
+        static void report_error(List<string> error_log)
+        {
+            foreach (string error in error_log) { Console.Write(error); }
+        }
+
+        static string show_ints(List<int> xs)
+        {
+            string result = "";
+            foreach (int x in xs) { result = result + Convert.ToString(x) + ", "; }
+            return result;
+        }
+
     }
     
 }
