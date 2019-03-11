@@ -11,10 +11,10 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
-namespace Game_Dangerous_Editor
+namespace GameDangerousEditor
 {
 
-    struct GPLC_source
+    struct GPLCSource
     {
         public int line;
         public int column;
@@ -24,64 +24,64 @@ namespace Game_Dangerous_Editor
     struct Binding
     {
         public string symbol;
-        public int read_index;
-        public int write_index;
-        public int init_value;
+        public int readIndex;
+        public int writeIndex;
+        public int initValue;
     }
 
-    struct GPLC_program_in
+    struct GPLCProgramIn
     {
-        public string prog_name;
-        public List<GPLC_source> sub_blocks;
+        public string progName;
+        public List<GPLCSource> subBlocks;
         public List<Binding> bs;
     }
 
-    struct GPLC_program_out
+    struct GPLCProgramOut
     {
 
-        public GPLC_program_out(string prog_name_in, List<int> bytecode_in, List<Binding> bs_in)
+        public GPLCProgramOut(string progNameIn, List<int> bytecodeIn, List<Binding> bsIn)
         {
-            prog_name = prog_name_in;
-            bytecode = bytecode_in;
-            bs = bs_in;
+            progName = progNameIn;
+            bytecode = bytecodeIn;
+            bs = bsIn;
         }
 
-        public string prog_name;
-        public List<int> bytecode;
-        public List<Binding> bs;
+        private string progName;
+        private List<int> bytecode;
+        private List<Binding> bs;
     }
 
     // The methods of this class are used to transform GPLC opcode arguments to their bytecode form in an error safe way, such that source code errors are handled and user feedback added to the error log.
-    class Safe_arg_hdlr
+    class SafeArgumentHandler
     {
-        public static int Ref_to_offset(List<Binding> b, GPLC_source sub_block, int mode, List<string> error_log)
+        public static int RefToOffset(List<Binding> b, GPLCSource subBlock, int mode, List<string> errorLog)
         {
             int n;
             for (n = 0; n <= b.Count; n++)
             {
-                if (n == b.Count) { error_log.Add("\n\nError at line " + Convert.ToString(sub_block.line) + " column " + Convert.ToString(sub_block.column) + ".  " + sub_block.content + " is an undeclared reference argument."); }
-                else if (b[n].symbol == sub_block.content)
+                if (n == b.Count) { errorLog.Add("\n\nError at line " + Convert.ToString(subBlock.line) + " column " + Convert.ToString(subBlock.column) + ".  " + subBlock.content + " is an undeclared reference argument."); }
+                else if (b[n].symbol == subBlock.content)
                 {
-                    if (mode == 0) { return b[n].read_index; }
-                    else { return b[n].write_index; }
+                    if (mode == 0) { return b[n].readIndex; }
+                    else { return b[n].writeIndex; }
                 }
                 else { }
             }
             return 0;
         }
 
-        public static int Read_literal(GPLC_source sub_block, List<string> error_log, int mode)
+        public static int ReadLiteral(GPLCSource subBlock, List<string> errorLog, int mode)
         {
-            string error_detail;
+            string errorDetail;
             try
             {
-                return (Convert.ToInt32(sub_block.content));
+                return (Convert.ToInt32(subBlock.content));
             }
             catch (FormatException)
             {
-                error_detail = "\n\nError at line " + Convert.ToString(sub_block.line) + " column " + Convert.ToString(sub_block.column) + ".  ";
-                if (mode == 0) { error_detail = error_detail + "The second term in a value initialisation must be an integer.  For details of how non - integer arguments are handled see the Op - code arguments section of the GPLC specification."; }
-                else { error_detail = error_detail + "This opcode argument must be a literal integer."; }
+                errorDetail = "\n\nError at line " + Convert.ToString(subBlock.line) + " column " + Convert.ToString(subBlock.column) + ".  ";
+                if (mode == 0) { errorDetail = errorDetail + "The second term in a value initialisation must be an integer.  For details of how non - integer arguments are handled see the Op - code arguments section of the GPLC specification."; }
+                else { errorDetail = errorDetail + "This opcode argument must be a literal integer."; }
                 error_log.Add(error_detail);
             }
             return 0;
@@ -90,21 +90,21 @@ namespace Game_Dangerous_Editor
 
     // The methods of this class parse the GPLC source code into a list of structs, each of which holds the parsed block of code and its line and column location in the input text file.
     // This is so it is simple to report the locations of source code errors to the user when they are detected further along the transformation pipeline.
-    class GPLC_parser
+    class GPLCParser
     {
-        public List<GPLC_source> Parser(string source_in)
+        public List<GPLCSource> Parser(string sourceIn)
         {
             int i = 0, l = 0, c = 0, len;
-            GPLC_source next_block;
-            List<GPLC_source> source_out = new List<GPLC_source>();
+            GPLCSource nextBlock;
+            List<GPLCSource> sourceOut = new List<GPLCSource>();
             for ( ; ; )
             {
-                if (i == source_in.Length) {break;}
-                next_block = Build_sub_block(source_in, i, l, c);
-                source_out.Add(next_block);
-                len = next_block.content.Length;
+                if (i == sourceIn.Length) {break;}
+                nextBlock = BuildSubBlock(sourceIn, i, l, c);
+                sourceOut.Add(nextBlock);
+                len = nextBlock.content.Length;
                 i = i + len;
-                if (source_in[i] == ' ') {c = c + len + 1;}
+                if (sourceIn[i] == ' ') {c = c + len + 1;}
                 else
                 {
                     c = 0;
@@ -112,44 +112,41 @@ namespace Game_Dangerous_Editor
                 }
                 i++;
             }
-            return source_out;
+            return sourceOut;
         }
 
-        private GPLC_source Build_sub_block(string source_in, int i, int l, int c)
+        private GPLCSource BuildSubBlock(string sourceIn, int i, int l, int c)
         {
             List<char> content = new List<char>();
-            GPLC_source sub_block = new GPLC_source();
+            GPLCSource subBlock = new GPLCSource();
             for ( ; ; )
             {
-                if (source_in[i] == ' ' || source_in[i] == '\n') {break;}
-                else {content.Add(source_in[i]);}
+                if (sourceIn[i] == ' ' || sourceIn[i] == '\n') {break;}
+                else {content.Add(sourceIn[i]);}
                 i++;
             }
-            sub_block.content = string.Join("", content);
-            sub_block.line = l + 1;
-            sub_block.column = c + 1;
- //           Console.Write("\n\ncontent: " + sub_block.content);
- //           Console.Write("\nline: " + sub_block.line);
- //           Console.Write("\ncolumn: " + sub_block.column);
-            return sub_block;
+            subBlock.content = string.Join("", content);
+            subBlock.line = l + 1;
+            subBlock.column = c + 1;
+            return subBlock;
         }
     }
 
-    // The Bind_values member takes as input a list of GPLC_source structs arising from the parsing of a GPLC program's value block.  Its output is a list of Binding structs
+    // The BindValues member takes as input a list of GPLCSource structs arising from the parsing of a GPLC program's value block.  Its output is a list of Binding structs
     // that each encode the relationship between a GPLC symbolic reference argument and the corresponding data block offset used at bytecode level.
-    class Value_binder
+    class ValueBinder
     {
-        public List<Binding> Bind_values(List<GPLC_source> sub_blocks, int offset, List<string> error_log)
+        public List<Binding> BindValues(List<GPLC_source> subBlocks, int offset, List<string> errorLog)
         {
             int i = 0, j;
             List<Binding> b = new List<Binding>();
-            Binding this_b = new Binding();
-            for (j = 0; j < sub_blocks.Count; j = j + 2)
+            Binding thisB = new Binding();
+            for (j = 0; j < subBlocks.Count; j = j + 2)
             {
-                this_b.symbol = sub_blocks[j].content;
-                this_b.read_index = i;
-                this_b.write_index = offset + i;
-                this_b.init_value = Safe_arg_hdlr.Read_literal(sub_blocks[j + 1], error_log, 0);
+                thisB.symbol = subBlocks[j].content;
+                thisB.readIndex = i;
+                thisB.writeIndex = offset + i;
+                thisB.initValue = SafeArgHdlr.ReadLiteral(subBlocks[j + 1], errorLog, 0);
                 i++;
             }
             return b;
@@ -157,55 +154,60 @@ namespace Game_Dangerous_Editor
     }
 
     // The members of this class handle the transformation of GPLC keywords to op - codes and of their reference arguments to the data block offsets used at bytecode level.
-    class Gen_bytecode
+    class GenerateBytecode
     {
-        private List<GPLC_program_out> prog_group;
+        private List<GPLCProgramOut> progGroup;
 
-        public Gen_bytecode()
+        public GenerateBytecode()
         {
-            prog_group = new List<GPLC_program_out>();
+            progGroup = new List<GPLCProgramOut>();
         }
 
-        public GPLC_program_out Get_program_out(int n)
+        public GPLCProgramOut GetProgramOut(int n)
         {
-            return prog_group[n];
+            return progGroup[n];
         }
 
-        public void Check_length()
+        public void CheckLength()
         {
-            Console.WriteLine("prog_group length: " + Convert.ToString(prog_group.Count));
+            Console.WriteLine("prog_group length: " + Convert.ToString(progGroup.Count));
         }
 
-        public void Transform_program(GPLC_program_in prog_in, List<string> error_log)
+        private List<int> TransformArguments (List<GPLCSource> source, List<Binding> b, List<int> mode, List<string> errorLog)
         {
-            int offset = 0, block_size = 0, m, n;
-            List<int> sig_block = new List<int>();
-            List<int> code_block = new List<int>();
-            List<GPLC_source> source = prog_in.sub_blocks;
+            for ()
+        }
+
+        public void TransformProgram(GPLCProgramIn progIn, List<string> errorLog)
+        {
+            int offset = 0, blockSize = 0, m, n;
+            List<int> sigBlock = new List<int>();
+            List<int> codeBlock = new List<int>();
+            List<GPLCSource> source = progIn.subBlocks;
             List<int> result = new List<int> { 0, 0, 0 };
-            string error_detail;
-            bool block_start = true;
-            for (m = 0; m < prog_in.sub_blocks.Count; )
+            string errorDetail;
+            bool blockStart = true;
+            for (m = 0; m < progIn.subBlocks.Count; )
             {
-                if (block_start == true && source[m].content != "--signal")
+                if (blockStart == true && source[m].content != "--signal")
                 {
-                    error_detail = "\n\nError at line " + Convert.ToString(source[m].line) + " column " + Convert.ToString(source[m].column) + ".  Every block of code must begin with --signal x, where x is the integer signal to be handled by the block.";
-                    error_log.Add(error_detail);
+                    errorDetail = "\n\nError at line " + Convert.ToString(source[m].line) + " column " + Convert.ToString(source[m].column) + ".  Every block of code must begin with --signal x, where x is the integer signal to be handled by the block.";
+                    errorLog.Add(errorDetail);
                     break;
                 }
-                else if (block_start == true)
+                else if (blockStart == true)
                 {
                     try
                     {
-                        sig_block.Add(Convert.ToInt32(source[m + 1].content));
-                        sig_block.Add(offset);
-                        block_start = false;
+                        sigBlock.Add(Convert.ToInt32(source[m + 1].content));
+                        sigBlock.Add(offset);
+                        blockStart = false;
                         m = m + 2;
                     }
                     catch (FormatException)
                     {
-                        error_detail = "\n\nError at line " + Convert.ToString(source[m + 1].line) + " column " + Convert.ToString(source[m + 1].column) + ".  The second term in a signal handler statement must be an integer.";
-                        error_log.Add(error_detail);
+                        errorDetail = "\n\nError at line " + Convert.ToString(source[m + 1].line) + " column " + Convert.ToString(source[m + 1].column) + ".  The second term in a signal handler statement must be an integer.";
+                        errorLog.Add(errorDetail);
                         break;
                     }
                 }
@@ -213,7 +215,7 @@ namespace Game_Dangerous_Editor
                 {
                     if (source[m].content == "if")
                     {
-                        List<int> this_line = new List<int> { 1, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Read_literal(source[m + 4], error_log, 1), Safe_arg_hdlr.Read_literal(source[m + 5], error_log, 1) };
+                        List<int> thisLine = new List<int> { 1, SafeArgHdlr.ReadLiteral(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Read_literal(source[m + 4], error_log, 1), Safe_arg_hdlr.Read_literal(source[m + 5], error_log, 1) };
                         code_block.AddRange(this_line);
                         m = m + 6;
                         offset = offset + 6;
