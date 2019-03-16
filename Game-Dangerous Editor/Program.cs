@@ -173,25 +173,34 @@ namespace GameDangerousEditor
             Console.WriteLine("prog_group length: " + Convert.ToString(progGroup.Count));
         }
 
-        private List<int> TransformArguments (List<GPLCSource> source, List<Binding> b, List<int> mode, List<string> errorLog)
+        private List<int> TransformArguments (List<GPLCSource> source, List<Binding> bs, List<int> mode, List<string> errorLog, int i)
         {
-            for ()
+            int n;
+            List<int> transformedArguments = new List<int>();
+            i++;
+            for (n = 0; n < mode.Count; n++)
+            {
+                if (mode[n] == 0) { transformedArguments.Add(SafeArgumentHandler.RefToOffset(bs, source[i], 0, errorLog)); }
+                else if (mode[n] == 1) { transformedArguments.Add(SafeArgumentHandler.RefToOffset(bs, source[i], 1, errorLog)); }
+                else { transformedArguments.Add(SafeArgumentHandler.ReadLiteral(source[i], errorLog, 1)); }
+                i++;
+            }
+            return transformedArguments;
         }
 
         public void TransformProgram(GPLCProgramIn progIn, List<string> errorLog)
         {
-            int offset = 0, blockSize = 0, m, n;
+            int offset = 0, blockSize = 0, i, n;
             List<int> sigBlock = new List<int>();
             List<int> codeBlock = new List<int>();
-            List<GPLCSource> source = progIn.subBlocks;
             List<int> result = new List<int> { 0, 0, 0 };
             string errorDetail;
             bool blockStart = true;
-            for (m = 0; m < progIn.subBlocks.Count; )
+            for (i = 0; i < progIn.subBlocks.Count; )
             {
-                if (blockStart == true && source[m].content != "--signal")
+                if (blockStart == true && progIn.subBlocks[i].content != "--signal")
                 {
-                    errorDetail = "\n\nError at line " + Convert.ToString(source[m].line) + " column " + Convert.ToString(source[m].column) + ".  Every block of code must begin with --signal x, where x is the integer signal to be handled by the block.";
+                    errorDetail = "\n\nError at line " + Convert.ToString(progIn.subBlocks[i].line) + " column " + Convert.ToString(progIn.subBlocks[i].column) + ".  Every block of code must begin with --signal x, where x is the integer signal to be handled by the block.";
                     errorLog.Add(errorDetail);
                     break;
                 }
@@ -199,202 +208,225 @@ namespace GameDangerousEditor
                 {
                     try
                     {
-                        sigBlock.Add(Convert.ToInt32(source[m + 1].content));
+                        sigBlock.Add(Convert.ToInt32(progIn.subBlocks[i + 1].content));
                         sigBlock.Add(offset);
                         blockStart = false;
-                        m = m + 2;
+                        i = i + 2;
                     }
                     catch (FormatException)
                     {
-                        errorDetail = "\n\nError at line " + Convert.ToString(source[m + 1].line) + " column " + Convert.ToString(source[m + 1].column) + ".  The second term in a signal handler statement must be an integer.";
+                        errorDetail = "\n\nError at line " + Convert.ToString(progIn.subBlocks[i + 1].line) + " column " + Convert.ToString(progIn.subBlocks[i + 1].column) + ".  The second term in a signal handler statement must be an integer.";
                         errorLog.Add(errorDetail);
                         break;
                     }
                 }
                 else
                 {
-                    if (source[m].content == "if")
+                    if (progIn.subBlocks[i].content == "if")
                     {
-                        List<int> thisLine = new List<int> { 1, SafeArgHdlr.ReadLiteral(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Read_literal(source[m + 4], error_log, 1), Safe_arg_hdlr.Read_literal(source[m + 5], error_log, 1) };
-                        code_block.AddRange(this_line);
-                        m = m + 6;
+                        List<int> mode = new List<int> { 2, 0, 0, 2, 2 };
+                        List<int> thisLine = new List<int> { 1, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 6;
                         offset = offset + 6;
-                        block_size = block_size + 6;
+                        blockSize = blockSize + 6;
                     }
-                    else if (source[m].content == "chg_state")
+                    else if (progIn.subBlocks[i].content == "chg_state")
                     {
-                        List<int> this_line = new List<int> { 2, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 6], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 7;
-                        offset = offset + 7;
-                        block_size = block_size + 7;
+                        List<int> mode = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 2, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 10;
+                        offset = offset + 10;
+                        blockSize = blockSize + 10;
                     }
-                    else if (source[m].content == "chg_grid")
+                    else if (progIn.subBlocks[i].content == "chg_grid")
                     {
-                        List<int> this_line = new List<int> { 3, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 6], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 7], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 8;
+                        List<int> mode = new List<int> { 0, 0, 0, 0, 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 3, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 8;
                         offset = offset + 8;
-                        block_size = block_size + 8;
+                        blockSize = blockSize + 8;
                     }
-                    else if (source[m].content == "send_signal")
+                    else if (progIn.subBlocks[i].content == "send_signal")
                     {
-                        List<int> this_line = new List<int> { 4, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 5;
+                        List<int> mode = new List<int> { 0, 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 4, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 5;
                         offset = offset + 5;
-                        block_size = block_size + 5;
+                        blockSize = blockSize + 5;
                     }
-                    else if (source[m].content == "chg_value")
+                    else if (progIn.subBlocks[i].content == "chg_value")
                     {
-                        List<int> this_line = new List<int> { 5, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 1, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 6], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 7;
+                        List<int> mode = new List<int> { 1, 0, 0, 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 5, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 7;
                         offset = offset + 7;
-                        block_size = block_size + 7;
+                        blockSize = blockSize + 7;
                     }
-                    else if (source[m].content == "chg_floor")
+                    else if (progIn.subBlocks[i].content == "chg_floor")
                     {
-                        List<int> this_line = new List<int> { 6, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 6], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 7;
+                        List<int> mode = new List<int> { 0, 0, 0, 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 6, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 7;
                         offset = offset + 7;
-                        block_size = block_size + 7;
+                        blockSize = blockSize + 7;
                     }
-                    else if (source[m].content == "chg_ps1")
+                    else if (progIn.subBlocks[i].content == "chg_ps1")
                     {
-                        List<int> this_line = new List<int> { 7, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 4;
+                        List<int> mode = new List<int> { 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 7, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 4;
                         offset = offset + 4;
-                        block_size = block_size + 4;
+                        blockSize = blockSize + 4;
                     }
-                    else if (source[m].content == "chg_obj_type")
+                    else if (progIn.subBlocks[i].content == "chg_obj_type")
                     {
-                        List<int> this_line = new List<int> { 8, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 5;
+                        List<int> mode = new List<int> { 0, 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 8, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 5;
                         offset = offset + 5;
-                        block_size = block_size + 5;
+                        blockSize = blockSize + 5;
                     }
-                    else if (source[m].content == "place_hold")
+                    else if (progIn.subBlocks[i].content == "place_hold")
                     {
-                        List<int> this_line = new List<int> { 9, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 2;
+                        List<int> mode = new List<int> { 0 };
+                        List<int> thisLine = new List<int> { 9, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 2;
                         offset = offset + 2;
-                        block_size = block_size + 2;
+                        blockSize = blockSize + 2;
                     }
-                    else if (source[m].content == "chg_grid_")
+                    else if (progIn.subBlocks[i].content == "chg_grid_")
                     {
-                        List<int> this_line = new List<int> { 10, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 6], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 7], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 8;
+                        List<int> mode = new List<int> { 0, 0, 0, 0, 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 10, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 8;
                         offset = offset + 8;
-                        block_size = block_size + 8;
+                        blockSize = blockSize + 8;
                     }
-                    else if (source[m].content == "copy_ps1")
+                    else if (progIn.subBlocks[i].content == "copy_ps1")
                     {
-                        List<int> this_line = new List<int> { 11, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 5;
+                        List<int> mode = new List<int> { 2, 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 11, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 5;
                         offset = offset + 5;
-                        block_size = block_size + 5;
+                        blockSize = blockSize + 5;
                     }
-                    else if (source[m].content == "copy_lstate")
+                    else if (progIn.subBlocks[i].content == "copy_lstate")
                     {
-                        List<int> this_line = new List<int> { 12, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 6], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 7], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 8;
+                        List<int> mode = new List<int> { 2, 0, 0, 0, 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 12, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 8;
                         offset = offset + 8;
-                        block_size = block_size + 8;
+                        blockSize = blockSize + 8;
                     }
-                    else if (source[m].content == "pass_msg")
+                    else if (progIn.subBlocks[i].content == "pass_msg")
                     {
-                        List<int> this_line = new List<int> { 13, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log)};
-                        for (n = 3; n <= Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1); n++)
+                        List<int> mode = new List<int> { 0 };
+                        List<int> thisLine = new List<int> { 13, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i + 1) };
+                        for (n = 3; n <= SafeArgumentHandler.ReadLiteral(progIn.subBlocks[i + 1], error_log, 1); n++)
                         {
-                            this_line.Add(Safe_arg_hdlr.Read_literal(source[m + n], error_log, 1));
+                            thisLine.Add(SafeArgumentHandler.ReadLiteral(progIn.subBlocks[i + n], error_log, 1));
                         }
-                        code_block.AddRange(this_line);
-                        m = m + n + 1;
+                        codeBlock.AddRange(thisLine);
+                        i = i + n + 1;
                         offset = offset + n;
-                        block_size = block_size + n;
+                        blockSize = blockSize + n;
                     }
-                    else if (source[m].content == "chg_ps0")
+                    else if (progIn.subBlocks[i].content == "chg_ps0")
                     {
-                        List<int> this_line = new List<int> { 14, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 4;
+                        List<int> mode = new List<int> { 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 14, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 4;
                         offset = offset + 4;
-                        block_size = block_size + 4;
+                        blockSize = blockSize + 4;
                     }
-                    else if (source[m].content == "copy_ps0")
+                    else if (progIn.subBlocks[i].content == "copy_ps0")
                     {
-                        List<int> this_line = new List<int> { 15, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 5;
+                        List<int> mode = new List<int> { 2, 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 15, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 5;
                         offset = offset + 5;
-                        block_size = block_size + 5;
+                        blockSize = blockSize + 5;
                     }
-                    else if (source[m].content == "binary_dice")
+                    else if (progIn.subBlocks[i].content == "binary_dice")
                     {
-                        List<int> this_line = new List<int> { 16, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Read_literal(source[m + 6], error_log, 1) };
-                        code_block.AddRange(this_line);
-                        m = m + 7;
+                        List<int> mode = new List<int> { 0, 0, 0, 0, 0, 2 };
+                        List<int> thisLine = new List<int> { 16, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 7;
                         offset = offset + 7;
-                        block_size = block_size + 7;
+                        blockSize = blockSize + 7;
                     }
-                    else if (source[m].content == "project_init")
+                    else if (progIn.subBlocks[i].content == "project_init")
                     {
-                        List<int> this_line = new List<int> { 17, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 6], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 7], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 8], 0, error_log), Safe_arg_hdlr.Read_literal(source[m + 9], error_log, 1), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 10], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 11;
-                        offset = offset + 11;
-                        block_size = block_size + 11;
+                        List<int> mode = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0 };
+                        List<int> thisLine = new List<int> { 17, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 14;
+                        offset = offset + 14;
+                        blockSize = blockSize + 14;
                     }
-                    else if (source[m].content == "project_update")
+                    else if (progIn.subBlocks[i].content == "project_update")
                     {
-                        List<int> this_line = new List<int> { 18, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 1, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 5], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 6;
+                        List<int> mode = new List<int> { 0, 1, 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 18, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 6;
                         offset = offset + 6;
-                        block_size = block_size + 6;
+                        blockSize = blockSize + 6;
                     }
-                    else if (source[m].content == "init_npc")
+                    else if (progIn.subBlocks[i].content == "init_npc")
                     {
-                        List<int> this_line = new List<int> { 19, Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 1], 0, error_log), Safe_arg_hdlr.Read_literal(source[m + 2], error_log, 1) };
-                        code_block.AddRange(this_line);
-                        m = m + 3;
+                        List<int> mode = new List<int> { 0, 0 };
+                        List<int> thisLine = new List<int> { 19, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 3;
                         offset = offset + 3;
-                        block_size = block_size + 3;
+                        blockSize = blockSize + 3;
                     }
-                    else if (source[m].content == "npc_decision")
+                    else if (progIn.subBlocks[i].content == "npc_decision")
                     {
-                        List<int> this_line = new List<int> { 20, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1) };
-                        code_block.AddRange(this_line);
-                        m = m + 2;
+                        List<int> mode = new List<int> { 1 };
+                        List<int> thisLine = new List<int> { 20, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 2;
                         offset = offset + 2;
-                        block_size = block_size + 2;
+                        blockSize = blockSize + 2;
                     }
-                    else if (source[m].content == "npc_move")
+                    else if (progIn.subBlocks[i].content == "npc_move")
                     {
-                        List<int> this_line = new List<int> { 21, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1) };
-                        code_block.AddRange(this_line);
-                        m = m + 2;
+                        List<int> mode = new List<int> { 1 };
+                        List<int> thisLine = new List<int> { 21, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 2;
                         offset = offset + 2;
-                        block_size = block_size + 2;
+                        blockSize = blockSize + 2;
                     }
-                    else if (source[m].content == "npc_damage")
+                    else if (progIn.subBlocks[i].content == "npc_damage")
                     {
-                        List<int> this_line = new List<int> { 22 };
-                        code_block.AddRange(this_line);
-                        m = m + 1;
-                        offset = offset + 1;
-                        block_size = block_size + 1;
+                        List<int> mode = new List<int> { 2 };
+                        List<int> thisLine = new List<int> { 22, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 2;
+                        offset = offset + 2;
+                        blockSize = blockSize + 2;
                     }
-                    else if (source[m].content == "block")
+                    else if (progIn.subBlocks[i].content == "block")
                     {
+
                         List<int> this_line = new List<int> { 5, 0, 0, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log) };
                         code_block.AddRange(this_line);
                         m = m + 5;
