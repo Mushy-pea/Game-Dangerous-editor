@@ -92,7 +92,7 @@ namespace GameDangerousEditor
     // This is so it is simple to report the locations of source code errors to the user when they are detected further along the transformation pipeline.
     class GPLCParser
     {
-        public List<GPLCSource> Parser(string sourceIn)
+        public static List<GPLCSource> Parser(string sourceIn)
         {
             int i = 0, l = 0, c = 0, len;
             GPLCSource nextBlock;
@@ -426,137 +426,74 @@ namespace GameDangerousEditor
                     }
                     else if (progIn.subBlocks[i].content == "block")
                     {
-
-                        List<int> this_line = new List<int> { 5, 0, 0, Safe_arg_hdlr.Read_literal(source[m + 1], error_log, 1), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 2], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 3], 0, error_log), Safe_arg_hdlr.Ref_to_offset(prog_in.bs, source[m + 4], 0, error_log) };
-                        code_block.AddRange(this_line);
-                        m = m + 5;
+                        List<int> mode = new List<int> { 2, 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 5, 536870910, 0, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        codeBlock.AddRange(thisLine);
+                        i = i + 5;
                         offset = offset + 7;
-                        block_size = block_size + 7;
+                        blockSize = blockSize + 7;
                     }
-                    else if (source[m].content == "--signal")
+                    else if (progIn.subBlocks[i].content == "--signal")
                     {
-                        sig_block.Add(block_size);
-                        block_size = 0;
-                        block_start = true;
+                        sigBlock.Add(blockSize);
+                        blockSize = 0;
+                        blockStart = true;
                     }
                     else
                     {
-                        error_detail = "\n\nError at line " + Convert.ToString(source[m].line) + " column " + Convert.ToString(source[m].column) + ".  " + source[m].content + " is not a valis GPLC op - code.  Compilation aborted.";
-                        error_log.Add(error_detail);
+                        errorDetail = "\n\nError at line " + Convert.ToString(progIn.subBlocks[i].line) + " column " + Convert.ToString(progIn.subBlocks[i].column) + ".  " + progIn.subBlocks[i].content + ".  Invalid GPLC op - code.";
+                        errorLog.Add(errorDetail);
                         break;
                     }
                 }
             }
-            List<int> data_block = new List<int>(Add_data_block(prog_in.bs));
-            result.AddRange(sig_block); result.Add(536870911); result.AddRange(code_block); result.Add(536870911); result.AddRange(data_block);
+            List<int> dataBlock = new List<int>(AddDataBlock(progIn.bs));
+            result.AddRange(sigBlock); result.Add(536870911); result.AddRange(codeBlock); result.Add(536870911); result.AddRange(dataBlock);
             result[0] = result.Count - 1;
-            result.Add(result.Count - 1 - data_block.Count);
-            GPLC_program_out this_prog = new GPLC_program_out(prog_in.prog_name, result, prog_in.bs);
-            prog_group.Add(this_prog);
-            Console.WriteLine("Transform_program added to prog_group.  Length: " + Convert.ToString(prog_group.Count));
+            GPLCProgramOut thisProg = new GPLCProgramOut(progIn.progName, result, progIn.bs);
+            progGroup.Add(thisProg);
         }
 
-        public List<int> Add_data_block(List<Binding> bs)
+        private List<int> AddDataBlock(List<Binding> bs)
         {
-            List<int> data_block = new List<int>();
-            foreach (Binding b in bs) { data_block.Add(b.init_value); }
-            return data_block;
+            List<int> dataBlock = new List<int>();
+            foreach (Binding b in bs) { dataBlock.Add(b.initValue); }
+            return dataBlock;
         }
     }
 
-    
+
 
     class Program
     {
         static void Main(string[] args)
         {
-            int m, n = 0, offset;
-            string source, structure;
-            string[] src_blocks, struct_blocks;
-            List<string> error_log = new List<string>();
-            GPLC_parser s = new GPLC_parser();
-            Value_binder t = new Value_binder();
-            GPLC_program_in this_prog = new GPLC_program_in();
-            List<GPLC_source> temp = new List<GPLC_source>();
-            Gen_bytecode fst_pass = new Gen_bytecode(); Gen_bytecode snd_pass = new Gen_bytecode();
-
-            source = File.ReadAllText(args[0]) + " ";
-            structure = File.ReadAllText(args[1]);
-            src_blocks = Regex.Split(source, "~");
-            struct_blocks = Regex.Split(structure, ", ");
-            foreach (string block in src_blocks)
+            int n = 0;
+            List<GPLCSource> progName = new List<GPLCSource>();
+            List<GPLCSource> valueBlock = new List<GPLCSource>();
+            List<GPLCSource> codeBlock = new List<GPLCSource>();
+            string source = File.ReadAllText(args[0]) + " ";
+            List<GPLCSource> blocks = GPLCParser.Parser(source);
+            for (i = 0; i < blocks.Count; i++)
             {
-                Console.Write("\n\n" + Convert.ToString(n) + ": " + block);
-                n++;
-            }
-            for (m = 0; m < 2; m++) {
-                n = 0;
-                foreach (string block in src_blocks)
+                if (n == 3)
                 {
-                    if (n % 3 == 0) { this_prog.prog_name = block; }
-                    else if (n % 3 == 1)
-                    {
-                        temp = s.Parser(block);
-                        if (m == 0)
-                        {
-                            this_prog.bs = t.Bind_values(temp, 0, error_log);
-                            if (error_log.Count > 0)
-                            {
-                                report_error(error_log);
-                                Console.Write("\n\nCompilation failed at value binding stage.");
-                                Environment.Exit(0);
-                            }
-                        }
-                        else
-                        {
-                            offset = fst_pass.Get_program_out(n / 3).bytecode.Last();
-                            this_prog.bs = t.Bind_values(temp, offset, error_log);
-                        }
-                    }
-                    else
-                    {
-                        this_prog.sub_blocks = s.Parser(block);
-                        if (m == 0)
-                        {
-                            fst_pass.Transform_program(this_prog, error_log);
-                            Console.WriteLine("fst_pass.Transform_program called.");
-                            if (error_log.Count > 0)
-                            {
-                                report_error(error_log);
-                                Console.Write("\n\nCompilation failed at code block transformation stage.");
-                                Environment.Exit(0);
-                            }
-                        }
-                        else
-                        {
-                            snd_pass.Transform_program(this_prog, error_log);
-                        }
-                    }
-                    n++;
+                    Console.Write("\n\nprogName: ");
+                    progName.ForEach(j => Console.Write("{0}\t", j));
+                    Console.Write("\nvalueBlock: ");
+                    valueBlock.ForEach(j => Console.Write("{0}\t", j));
+                    Console.Write("\ncodeBlock: ");
+                    codeBlock.ForEach(j => Console.Write("{0}\t", j));
+                    progName = new List<GPLCSource>();
+                    valueBlock = new List<GPLCSource>();
+                    codeBlock = new List<GPLCSource>();
+                    n = 0;
                 }
+                else if (blocks[i].content == "~") { n++; }
+                else if (n == 0) { progName.Add(blocks[i]); }
+                else if (n == 1) { valueBlock.Add(blocks[i]); }
+                else { codeBlock.Add(blocks[i]); }
             }
-            fst_pass.Check_length();
-            snd_pass.Check_length();
-            Console.Write("\nEnter the number of the program you wish to view: ");
-            string choice = Console.ReadLine();
-            GPLC_program_out prog_out = snd_pass.Get_program_out(Convert.ToInt32(choice));
-            Console.Write("\nOutput: " + show_ints(prog_out.bytecode));
-            
-
         }
-
-        static void report_error(List<string> error_log)
-        {
-            foreach (string error in error_log) { Console.Write(error); }
-        }
-
-        static string show_ints(List<int> xs)
-        {
-            string result = "";
-            foreach (int x in xs) { result = result + Convert.ToString(x) + ", "; }
-            return result;
-        }
-
     }
-    
-}
+
