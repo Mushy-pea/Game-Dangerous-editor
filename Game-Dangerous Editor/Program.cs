@@ -1,7 +1,7 @@
 ﻿// Game :: Dangerous Editor code by Steven Tinsley.  You are free to use this software and view its source code.
 // If you wish to redistribute it or use it as part of your own work, this is permitted as long as you acknowledge the work is by the abovementioned author.
 
-//This is the C# implementation of the GPLC bytecode generator, designed to be equivalent to Game-Dangerous/assm_gplc.hs but with source code error reporting.
+//This is the C# implementation of the GPLC compiler, designed to be equivalent to Game-Dangerous/assm_gplc.hs but with source code error reporting.
 
 using System;
 using System.IO;
@@ -11,7 +11,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
-namespace GameDangerousEditor
+namespace Game_Dangerous_Editor
 {
 
     struct GPLCSource
@@ -82,7 +82,7 @@ namespace GameDangerousEditor
                 errorDetail = "\n\nError at line " + Convert.ToString(subBlock.line) + " column " + Convert.ToString(subBlock.column) + ".  ";
                 if (mode == 0) { errorDetail = errorDetail + "The second term in a value initialisation must be an integer.  For details of how non - integer arguments are handled see the Op - code arguments section of the GPLC specification."; }
                 else { errorDetail = errorDetail + "This opcode argument must be a literal integer."; }
-                error_log.Add(error_detail);
+                errorLog.Add(errorDetail);
             }
             return 0;
         }
@@ -97,33 +97,32 @@ namespace GameDangerousEditor
             int i = 0, l = 0, c = 0, len;
             GPLCSource nextBlock;
             List<GPLCSource> sourceOut = new List<GPLCSource>();
-            for ( ; ; )
+            for (; ; )
             {
-                if (i == sourceIn.Length) {break;}
+                if (i == sourceIn.Length) { break; }
                 nextBlock = BuildSubBlock(sourceIn, i, l, c);
                 sourceOut.Add(nextBlock);
                 len = nextBlock.content.Length;
                 i = i + len;
-                if (sourceIn[i] == ' ') {c = c + len + 1;}
+                if (sourceIn[i] == ' ') { c = c + len + 1; i++; }
                 else
                 {
                     c = 0;
                     l = l + 1;
+                    i = i + 2;
                 }
-                i++;
             }
             return sourceOut;
         }
 
-        private GPLCSource BuildSubBlock(string sourceIn, int i, int l, int c)
+        private static GPLCSource BuildSubBlock(string sourceIn, int i, int l, int c)
         {
             List<char> content = new List<char>();
             GPLCSource subBlock = new GPLCSource();
-            for ( ; ; )
+            for ( ; i < sourceIn.Length; i++)
             {
-                if (sourceIn[i] == ' ' || sourceIn[i] == '\n') {break;}
-                else {content.Add(sourceIn[i]);}
-                i++;
+                if (sourceIn[i] == ' ' || (sourceIn[i] == '\r' && sourceIn[i + 1] == '\n')) { break; }
+                else { content.Add(sourceIn[i]); }
             }
             subBlock.content = string.Join("", content);
             subBlock.line = l + 1;
@@ -136,7 +135,7 @@ namespace GameDangerousEditor
     // that each encode the relationship between a GPLC symbolic reference argument and the corresponding data block offset used at bytecode level.
     class ValueBinder
     {
-        public List<Binding> BindValues(List<GPLC_source> subBlocks, int offset, List<string> errorLog)
+        public List<Binding> BindValues(List<GPLCSource> subBlocks, int offset, List<string> errorLog)
         {
             int i = 0, j;
             List<Binding> b = new List<Binding>();
@@ -146,7 +145,7 @@ namespace GameDangerousEditor
                 thisB.symbol = subBlocks[j].content;
                 thisB.readIndex = i;
                 thisB.writeIndex = offset + i;
-                thisB.initValue = SafeArgHdlr.ReadLiteral(subBlocks[j + 1], errorLog, 0);
+                thisB.initValue = SafeArgumentHandler.ReadLiteral(subBlocks[j + 1], errorLog, 0);
                 i++;
             }
             return b;
@@ -173,7 +172,7 @@ namespace GameDangerousEditor
             Console.WriteLine("prog_group length: " + Convert.ToString(progGroup.Count));
         }
 
-        private List<int> TransformArguments (List<GPLCSource> source, List<Binding> bs, List<int> mode, List<string> errorLog, int i)
+        private List<int> TransformArguments(List<GPLCSource> source, List<Binding> bs, List<int> mode, List<string> errorLog, int i)
         {
             int n;
             List<int> transformedArguments = new List<int>();
@@ -196,7 +195,7 @@ namespace GameDangerousEditor
             List<int> result = new List<int> { 0, 0, 0 };
             string errorDetail;
             bool blockStart = true;
-            for (i = 0; i < progIn.subBlocks.Count; )
+            for (i = 0; i < progIn.subBlocks.Count;)
             {
                 if (blockStart == true && progIn.subBlocks[i].content != "--signal")
                 {
@@ -225,7 +224,8 @@ namespace GameDangerousEditor
                     if (progIn.subBlocks[i].content == "if")
                     {
                         List<int> mode = new List<int> { 2, 0, 0, 2, 2 };
-                        List<int> thisLine = new List<int> { 1, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 1 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 6;
                         offset = offset + 6;
@@ -234,7 +234,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "chg_state")
                     {
                         List<int> mode = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-                        List<int> thisLine = new List<int> { 2, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 2 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 10;
                         offset = offset + 10;
@@ -243,7 +244,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "chg_grid")
                     {
                         List<int> mode = new List<int> { 0, 0, 0, 0, 0, 0, 0 };
-                        List<int> thisLine = new List<int> { 3, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 3 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 8;
                         offset = offset + 8;
@@ -252,7 +254,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "send_signal")
                     {
                         List<int> mode = new List<int> { 0, 0, 0, 0 };
-                        List<int> thisLine = new List<int> { 4, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 4 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 5;
                         offset = offset + 5;
@@ -261,7 +264,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "chg_value")
                     {
                         List<int> mode = new List<int> { 1, 0, 0, 0, 0, 0 };
-                        List<int> thisLine = new List<int> { 5, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 5 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 7;
                         offset = offset + 7;
@@ -270,7 +274,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "chg_floor")
                     {
                         List<int> mode = new List<int> { 0, 0, 0, 0, 0, 0 };
-                        List<int> thisLine = new List<int> { 6, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 6 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 7;
                         offset = offset + 7;
@@ -279,7 +284,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "chg_ps1")
                     {
                         List<int> mode = new List<int> { 0, 0, 0 };
-                        List<int> thisLine = new List<int> { 7, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 7 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 4;
                         offset = offset + 4;
@@ -288,7 +294,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "chg_obj_type")
                     {
                         List<int> mode = new List<int> { 0, 0, 0, 0 };
-                        List<int> thisLine = new List<int> { 8, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 8 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 5;
                         offset = offset + 5;
@@ -297,7 +304,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "place_hold")
                     {
                         List<int> mode = new List<int> { 0 };
-                        List<int> thisLine = new List<int> { 9, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 9 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 2;
                         offset = offset + 2;
@@ -306,7 +314,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "chg_grid_")
                     {
                         List<int> mode = new List<int> { 0, 0, 0, 0, 0, 0, 0 };
-                        List<int> thisLine = new List<int> { 10, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 10 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 8;
                         offset = offset + 8;
@@ -315,7 +324,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "copy_ps1")
                     {
                         List<int> mode = new List<int> { 2, 0, 0, 0 };
-                        List<int> thisLine = new List<int> { 11, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 11 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 5;
                         offset = offset + 5;
@@ -324,7 +334,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "copy_lstate")
                     {
                         List<int> mode = new List<int> { 2, 0, 0, 0, 0, 0, 0 };
-                        List<int> thisLine = new List<int> { 12, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 12 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 8;
                         offset = offset + 8;
@@ -333,10 +344,11 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "pass_msg")
                     {
                         List<int> mode = new List<int> { 0 };
-                        List<int> thisLine = new List<int> { 13, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i + 1) };
-                        for (n = 3; n <= SafeArgumentHandler.ReadLiteral(progIn.subBlocks[i + 1], error_log, 1); n++)
+                        List<int> thisLine = new List<int> { 13 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i + 1));
+                        for (n = 3; n <= SafeArgumentHandler.ReadLiteral(progIn.subBlocks[i + 1], errorLog, 1); n++)
                         {
-                            thisLine.Add(SafeArgumentHandler.ReadLiteral(progIn.subBlocks[i + n], error_log, 1));
+                            thisLine.Add(SafeArgumentHandler.ReadLiteral(progIn.subBlocks[i + n], errorLog, 1));
                         }
                         codeBlock.AddRange(thisLine);
                         i = i + n + 1;
@@ -346,7 +358,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "chg_ps0")
                     {
                         List<int> mode = new List<int> { 0, 0, 0 };
-                        List<int> thisLine = new List<int> { 14, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 14 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 4;
                         offset = offset + 4;
@@ -355,7 +368,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "copy_ps0")
                     {
                         List<int> mode = new List<int> { 2, 0, 0, 0 };
-                        List<int> thisLine = new List<int> { 15, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 15 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 5;
                         offset = offset + 5;
@@ -364,7 +378,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "binary_dice")
                     {
                         List<int> mode = new List<int> { 0, 0, 0, 0, 0, 2 };
-                        List<int> thisLine = new List<int> { 16, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 16 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 7;
                         offset = offset + 7;
@@ -373,7 +388,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "project_init")
                     {
                         List<int> mode = new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0 };
-                        List<int> thisLine = new List<int> { 17, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 17 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 14;
                         offset = offset + 14;
@@ -382,7 +398,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "project_update")
                     {
                         List<int> mode = new List<int> { 0, 1, 0, 0, 0 };
-                        List<int> thisLine = new List<int> { 18, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 18 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 6;
                         offset = offset + 6;
@@ -391,7 +408,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "init_npc")
                     {
                         List<int> mode = new List<int> { 0, 0 };
-                        List<int> thisLine = new List<int> { 19, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 19 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 3;
                         offset = offset + 3;
@@ -400,7 +418,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "npc_decision")
                     {
                         List<int> mode = new List<int> { 1 };
-                        List<int> thisLine = new List<int> { 20, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 20 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 2;
                         offset = offset + 2;
@@ -409,7 +428,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "npc_move")
                     {
                         List<int> mode = new List<int> { 1 };
-                        List<int> thisLine = new List<int> { 21, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 21 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 2;
                         offset = offset + 2;
@@ -418,7 +438,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "npc_damage")
                     {
                         List<int> mode = new List<int> { 2 };
-                        List<int> thisLine = new List<int> { 22, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 22 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 2;
                         offset = offset + 2;
@@ -427,7 +448,8 @@ namespace GameDangerousEditor
                     else if (progIn.subBlocks[i].content == "block")
                     {
                         List<int> mode = new List<int> { 2, 0, 0, 0 };
-                        List<int> thisLine = new List<int> { 5, 536870910, 0, TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i) };
+                        List<int> thisLine = new List<int> { 5, 536870910, 0 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 5;
                         offset = offset + 7;
@@ -468,32 +490,49 @@ namespace GameDangerousEditor
     {
         static void Main(string[] args)
         {
-            int n = 0;
+            int m, n = 0, i;
             List<GPLCSource> progName = new List<GPLCSource>();
             List<GPLCSource> valueBlock = new List<GPLCSource>();
             List<GPLCSource> codeBlock = new List<GPLCSource>();
             string source = File.ReadAllText(args[0]) + " ";
             List<GPLCSource> blocks = GPLCParser.Parser(source);
+//            for (m = 0; m < blocks.Count; m++)
+//            {
+//                Console.Write("\ncontent: " + blocks[m].content);
+//                Console.Write("\nlength: " + blocks[m].content.Length);
+//            }
             for (i = 0; i < blocks.Count; i++)
             {
                 if (n == 3)
                 {
                     Console.Write("\n\nprogName: ");
-                    progName.ForEach(j => Console.Write("{0}\t", j));
-                    Console.Write("\nvalueBlock: ");
-                    valueBlock.ForEach(j => Console.Write("{0}\t", j));
-                    Console.Write("\ncodeBlock: ");
-                    codeBlock.ForEach(j => Console.Write("{0}\t", j));
+                    showBlocks(progName);
+                    Console.Write("\n\nvalueBlock: ");
+                    showBlocks(valueBlock);
+                    Console.Write("\n\ncodeBlock: ");
+                    showBlocks(codeBlock);
                     progName = new List<GPLCSource>();
                     valueBlock = new List<GPLCSource>();
                     codeBlock = new List<GPLCSource>();
                     n = 0;
-                }
+                    i--;
+               }
                 else if (blocks[i].content == "~") { n++; }
                 else if (n == 0) { progName.Add(blocks[i]); }
                 else if (n == 1) { valueBlock.Add(blocks[i]); }
                 else { codeBlock.Add(blocks[i]); }
             }
+            Console.ReadLine();
+        }
+
+        static void showBlocks(List<GPLCSource> blocks)
+        {
+            int i;
+            for (i = 0; i < blocks.Count; i++)
+            {
+                Console.Write(blocks[i].content + " ");
+            }
         }
     }
+}
 
