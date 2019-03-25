@@ -53,9 +53,9 @@ namespace Game_Dangerous_Editor
             bs = bsIn;
         }
 
-        private string progName;
-        private List<int> bytecode;
-        private List<Binding> bs;
+        public string progName;
+        public List<int> bytecode;
+        public List<Binding> bs;
     }
 
     // The methods of this class are used to transform GPLC opcode arguments to their bytecode form in an error safe way, such that source code errors are handled and user feedback added to the error log.
@@ -66,8 +66,9 @@ namespace Game_Dangerous_Editor
             int n;
             for (n = 0; n <= bs.Count; n++)
             {
-                if (n == bs.Count && mode == 1) { errorLog.Add("\n\nError at line " + Convert.ToString(subBlock.line) + " column " + Convert.ToString(subBlock.column) + " (in code block).  " + subBlock.content + " is an undeclared reference argument."); }
-                else if (n == bs.Count && mode == 2 ) { errorLog.Add("\n\nError at line " + Convert.ToString(subBlock.line) + " column " + Convert.ToString(subBlock.column) + " (in map structure data).  " + subBlock.content + " is an undeclared reference argument."}
+                if (n == bs.Count && mode == 0) { errorLog.Add("\n\nError at line " + Convert.ToString(subBlock.line) + " column " + Convert.ToString(subBlock.column) + " (in code block).  " + subBlock.content + " is an undeclared reference argument."); }
+                else if (n == bs.Count && mode == 1) { errorLog.Add("\n\nError at line " + Convert.ToString(subBlock.line) + " column " + Convert.ToString(subBlock.column) + " (in code block).  " + subBlock.content + " is an undeclared reference argument."); }
+                else if (n == bs.Count && mode == 2 ) { errorLog.Add("\n\nError at line " + Convert.ToString(subBlock.line) + " column " + Convert.ToString(subBlock.column) + " (in map structure data).  " + subBlock.content + " is an undeclared reference argument."); }
                 else if (bs[n].symbol == subBlock.content)
                 {
                     if (mode == 0) { return bs[n].readIndex; }
@@ -184,9 +185,21 @@ namespace Game_Dangerous_Editor
             progGroup = new List<GPLCProgramOut>();
         }
 
-        public GPLCProgramOut GetProgramOut(bool patchFlag, List<int> header, int n)
+        public string GetProgramOut(bool patchFlag, List<int> header, List<GPLCSource> patchList, int n)
         {
-            if (patchFlag == true) { }
+            if (patchFlag == true)
+            {
+                List<int> patchedCode = new List<int>(PatchCode(progGroup[n].bytecode, patchList, progGroup[n].bs));
+                List<int> outputCode = new List<int>(header);
+                outputCode.AddRange(patchedCode);
+                return (string.Join(", ", outputCode));
+            }
+            else
+            {
+                List<int> outputCode = new List<int>(header);
+                outputCode.AddRange(progGroup[n].bytecode);
+                return (string.Join(", ", outputCode));
+            }
         }
 
         public void CheckLength()
@@ -505,17 +518,18 @@ namespace Game_Dangerous_Editor
             return dataBlock;
         }
 
-        private List<int> PatchCode(List<int> byteCode, List<GPLCSource> patchList, List<Binding> bs, List<string> errorLog)
+        private List<int> PatchCode(List<int> bytecode, List<GPLCSource> patchList, List<Binding> bs)
         {
             int i, offset, patch;
-            for (i = 0; i < patchList.Count; i = i + 2)
+            List<string> errorLog = new List<string>();
+            for (i = 6; i < patchList.Count; i = i + 2)
             {
                 offset = SafeArgumentHandler.RefToOffset(bs, patchList[i], 2, errorLog);
                 patch = SafeArgumentHandler.ReadLiteral(patchList[i + 1], errorLog, 2);
                 if (errorLog.Count > 0) { Console.Write(errorLog[0] + "\n\nCompilation aborted at data block patching stage."); Environment.Exit(1); }
-                byteCode[offset] = patch;
+                bytecode[offset] = patch;
             }
-            return byteCode;
+            return bytecode;
         }
     }
 
@@ -523,7 +537,8 @@ namespace Game_Dangerous_Editor
     {
         static void Main(string[] args)
         {
-            int m, n = 0, i;
+            int n = 0, i;
+            bool patchFlag;
             List<GPLCSource> progName = new List<GPLCSource>();
             List<GPLCSource> valueBlock = new List<GPLCSource>();
             List<GPLCSource> codeBlock = new List<GPLCSource>();
@@ -532,7 +547,10 @@ namespace Game_Dangerous_Editor
             string progNameString;
             GenerateBytecode programSet = new GenerateBytecode();
             string source = File.ReadAllText(args[0]) + " ";
+            string structure = File.ReadAllText(args[1]) + " ";
             List<GPLCSource> blocks = GPLCParser.Parser(source);
+            List<GPLCSource> structureBlocks = GPLCParser.Parser(structure);
+            List<GPLCSource> body = new List<GPLCSource>();
             for (i = 0; i < blocks.Count; i++)
             {
                 if (n == 3)
@@ -553,6 +571,22 @@ namespace Game_Dangerous_Editor
                 else if (n == 0) { progName.Add(blocks[i]); }
                 else if (n == 1) { valueBlock.Add(blocks[i]); }
                 else { codeBlock.Add(blocks[i]); }
+            }
+            using (StreamWriter h = new StreamWriter(args[2]))
+            {
+                for (i = 0; i < structureBlocks.Count; i++)
+                {
+                    if (structureBlocks[i].content == "~")
+                    {
+                        List<int> header = new List<int> { Convert.ToInt32(body[0].content), Convert.ToInt32(body[1].content), Convert.ToInt32(body[2].content), Convert.ToInt32(body[3].content) };
+                        if (body[5].content == "n") { patchFlag = false; }
+                        else { patchFlag = true; }
+                        h.Write(programSet.GetProgramOut(patchFlag, header, body, Convert.ToInt32(body[4].content)));
+                        header = new List<int>();
+                        body = new List<GPLCSource>();
+                    }
+                    else { body.Add(structureBlocks[i]); }
+                }
             }
             Console.ReadLine();
         }
