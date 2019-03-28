@@ -148,7 +148,7 @@ namespace Game_Dangerous_Editor
         public static List<Binding> BindValues(List<GPLCSource> subBlocks, int offset, List<string> errorLog)
         {
             int i = 0, j;
-            List<Binding> b = new List<Binding>();
+            List<Binding> bs = new List<Binding>();
             Binding thisB = new Binding();
             for (j = 0; j < subBlocks.Count; j = j + 2)
             {
@@ -156,9 +156,10 @@ namespace Game_Dangerous_Editor
                 thisB.readIndex = i;
                 thisB.writeIndex = offset + i;
                 thisB.initValue = SafeArgumentHandler.ReadLiteral(subBlocks[j + 1], errorLog, 0);
+                bs.Add(thisB);
                 i++;
             }
-            return b;
+            return bs;
         }
 
         public static int DetermineOffset(List<GPLCSource> subBlocks)
@@ -371,7 +372,7 @@ namespace Game_Dangerous_Editor
                             thisLine.Add(SafeArgumentHandler.ReadLiteral(progIn.subBlocks[i + n], errorLog, 1));
                         }
                         codeBlock.AddRange(thisLine);
-                        i = i + n + 1;
+                        i = i + n;
                         offset = offset + n;
                         blockSize = blockSize + n;
                     }
@@ -465,6 +466,16 @@ namespace Game_Dangerous_Editor
                         offset = offset + 2;
                         blockSize = blockSize + 2;
                     }
+                    else if (progIn.subBlocks[i].content == "cpede_move")
+                    {
+                        List<int> mode = new List<int> { 1, 2 };
+                        List<int> thisLine = new List<int> { 23 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
+                        codeBlock.AddRange(thisLine);
+                        i = i + 3;
+                        offset = offset + 3;
+                        blockSize = blockSize + 3;
+                    }
                     else if (progIn.subBlocks[i].content == "block")
                     {
                         List<int> mode = new List<int> { 2, 0, 0, 0 };
@@ -483,7 +494,7 @@ namespace Game_Dangerous_Editor
                     }
                     else
                     {
-                        errorDetail = "\n\nError at line " + Convert.ToString(progIn.subBlocks[i].line) + " column " + Convert.ToString(progIn.subBlocks[i].column) + ".  " + progIn.subBlocks[i].content + ".  Invalid GPLC op - code.";
+                        errorDetail = "\n\nError at line " + Convert.ToString(progIn.subBlocks[i].line) + " column " + Convert.ToString(progIn.subBlocks[i].column) + ".  " + progIn.subBlocks[i].content + " is an invalid GPLC op - code.";
                         errorLog.Add(errorDetail);
                         break;
                     }
@@ -491,7 +502,7 @@ namespace Game_Dangerous_Editor
             }
             List<int> dataBlock = new List<int>(AddDataBlock(progIn.bs));
             result.AddRange(sigBlock); result.Add(536870911); result.AddRange(codeBlock); result.Add(536870911); result.AddRange(dataBlock);
-            result[0] = result.Count - 1;
+            result[0] = result.Count;
             GPLCProgramOut thisProg = new GPLCProgramOut(progIn.progName, result, progIn.bs);
             progGroup.Add(thisProg);
         }
@@ -522,12 +533,18 @@ namespace Game_Dangerous_Editor
         {
             int i, offset, patch;
             List<string> errorLog = new List<string>();
-            for (i = 6; i < patchList.Count; i = i + 2)
+            for (i = 7; i < patchList.Count; i = i + 2)
             {
                 offset = SafeArgumentHandler.RefToOffset(bs, patchList[i], 2, errorLog);
                 patch = SafeArgumentHandler.ReadLiteral(patchList[i + 1], errorLog, 2);
-                if (errorLog.Count > 0) { Console.Write(errorLog[0] + "\n\nCompilation aborted at data block patching stage."); Environment.Exit(1); }
                 bytecode[offset] = patch;
+            }
+            if (errorLog.Count > 0)
+            {
+                foreach (string error in errorLog) { Console.Write(error); }
+                Console.Write("\n\nCompilation aborted at data block patching stage.");
+                Console.ReadLine();
+                Environment.Exit(1);
             }
             return bytecode;
         }
@@ -551,16 +568,24 @@ namespace Game_Dangerous_Editor
             List<GPLCSource> blocks = GPLCParser.Parser(source);
             List<GPLCSource> structureBlocks = GPLCParser.Parser(structure);
             List<GPLCSource> body = new List<GPLCSource>();
-            for (i = 0; i < blocks.Count; i++)
+            for (i = 0; i <= blocks.Count; i++)
             {
-                if (n == 3)
+                if (n == 3 || i == blocks.Count)
                 {
+                    if (errorLog.Count > 0)
+                    {
+                        foreach (string error in errorLog) { Console.Write(error); }
+                        Console.Write("\n\nCompilation aborted at code block transformation stage.");
+                        Console.ReadLine();
+                        Environment.Exit(1);
+                    }
                     Console.Write("\n\nCompiling program: ");
                     progNameString = subBlocksToString(progName);
                     Console.Write(progNameString);
                     bs = ValueBinder.BindValues(valueBlock, ValueBinder.DetermineOffset(codeBlock), errorLog);
                     GPLCProgramIn prog = new GPLCProgramIn(progNameString, codeBlock, bs);
                     programSet.TransformProgram(prog, errorLog);
+                    if (i == blocks.Count) { break; }
                     progName = new List<GPLCSource>();
                     valueBlock = new List<GPLCSource>();
                     codeBlock = new List<GPLCSource>();
@@ -574,14 +599,21 @@ namespace Game_Dangerous_Editor
             }
             using (StreamWriter h = new StreamWriter(args[2]))
             {
-                for (i = 0; i < structureBlocks.Count; i++)
+                for (i = 0; i <= structureBlocks.Count; i++)
                 {
-                    if (structureBlocks[i].content == "~")
+                    if (i == structureBlocks.Count || structureBlocks[i].content == "~")
                     {
                         List<int> header = new List<int> { Convert.ToInt32(body[0].content), Convert.ToInt32(body[1].content), Convert.ToInt32(body[2].content), Convert.ToInt32(body[3].content) };
-                        if (body[5].content == "n") { patchFlag = false; }
-                        else { patchFlag = true; }
-                        h.Write(programSet.GetProgramOut(patchFlag, header, body, Convert.ToInt32(body[4].content)));
+                        if (body[4].content == "0")
+                        {
+                            h.Write(body[0].content + ", " + body[1].content + ", " + body[2].content + ", " + body[3].content + ", " + body[4].content + ", ");
+                        }
+                        else
+                        {
+                            if (body[5].content == "n") { patchFlag = false; }
+                            else { patchFlag = true; }
+                            h.Write(programSet.GetProgramOut(patchFlag, header, body, Convert.ToInt32(body[4].content) - 1) + ", ");
+                        }
                         header = new List<int>();
                         body = new List<GPLCSource>();
                     }
@@ -594,10 +626,10 @@ namespace Game_Dangerous_Editor
         static string subBlocksToString(List<GPLCSource> subBlocks)
         {
             int i;
-            string theString = " ";
+            string theString = "";
             for (i = 0; i < subBlocks.Count; i++)
             {
-                theString = theString + subBlocks[i];
+                theString = theString + subBlocks[i].content + " ";
             }
             return theString;
         }
