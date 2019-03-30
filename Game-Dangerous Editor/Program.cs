@@ -169,7 +169,7 @@ namespace Game_Dangerous_Editor
             {
                 if (subBlocks[i].content == "block") { c = c + 2; }
                 else if (subBlocks[i].content == "pass_msg") { c--; }
-                else if (subBlocks[i].content == "signal") { c = c + 3; }
+                else if (subBlocks[i].content == "--signal") { c = c + 1; }
                 else { }
             }
             return (subBlocks.Count + c + 4);
@@ -373,8 +373,8 @@ namespace Game_Dangerous_Editor
                         }
                         codeBlock.AddRange(thisLine);
                         i = i + n;
-                        offset = offset + n;
-                        blockSize = blockSize + n;
+                        offset = offset + n - 1;
+                        blockSize = blockSize + n - 1;
                     }
                     else if (progIn.subBlocks[i].content == "chg_ps0")
                     {
@@ -501,8 +501,9 @@ namespace Game_Dangerous_Editor
                 }
             }
             List<int> dataBlock = new List<int>(AddDataBlock(progIn.bs));
+            sigBlock.Add(blockSize);
             result.AddRange(sigBlock); result.Add(536870911); result.AddRange(codeBlock); result.Add(536870911); result.AddRange(dataBlock);
-            result[0] = result.Count;
+            result[0] = result.Count - 1;
             GPLCProgramOut thisProg = new GPLCProgramOut(progIn.progName, result, progIn.bs);
             progGroup.Add(thisProg);
         }
@@ -535,7 +536,7 @@ namespace Game_Dangerous_Editor
             List<string> errorLog = new List<string>();
             for (i = 7; i < patchList.Count; i = i + 2)
             {
-                offset = SafeArgumentHandler.RefToOffset(bs, patchList[i], 2, errorLog);
+                offset = SafeArgumentHandler.RefToOffset(bs, patchList[i], 2, errorLog) + 1;
                 patch = SafeArgumentHandler.ReadLiteral(patchList[i + 1], errorLog, 2);
                 bytecode[offset] = patch;
             }
