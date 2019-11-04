@@ -322,16 +322,6 @@ namespace Game_Dangerous_Editor
                         offset = offset + 5;
                         blockSize = blockSize + 5;
                     }
-                    else if (progIn.subBlocks[i].content == "place_hold")
-                    {
-                        List<int> mode = new List<int> { 0 };
-                        List<int> thisLine = new List<int> { 9 };
-                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
-                        codeBlock.AddRange(thisLine);
-                        i = i + 2;
-                        offset = offset + 2;
-                        blockSize = blockSize + 2;
-                    }
                     else if (progIn.subBlocks[i].content == "chg_grid_")
                     {
                         List<int> mode = new List<int> { 0, 0, 0, 0, 0, 0, 0 };
@@ -483,6 +473,16 @@ namespace Game_Dangerous_Editor
                         thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
                         i = i + 5;
+                        offset = offset + 7;
+                        blockSize = blockSize + 7;
+                    }
+                    else if (progIn.subBlocks[i].content == "place_light")
+                    {
+                        List<int> mode = new List<int> { 0, 0, 0, 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 9 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
+                        codeBlock.AddRange(thisLine);
+                        i = i + 7;
                         offset = offset + 7;
                         blockSize = blockSize + 7;
                     }
