@@ -292,6 +292,16 @@ namespace Game_Dangerous_Editor
                         offset = offset + 7;
                         blockSize = blockSize + 7;
                     }
+                    else if (progIn.subBlocks[i].content == "chg_value_")
+                    {
+                        List<int> mode = new List<int> { 2, 0, 0, 0, 0, 0 };
+                        List<int> thisLine = new List<int> { 5 };
+                        thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
+                        codeBlock.AddRange(thisLine);
+                        i = i + 7;
+                        offset = offset + 7;
+                        blockSize = blockSize + 7;
+                    }
                     else if (progIn.subBlocks[i].content == "chg_floor")
                     {
                         List<int> mode = new List<int> { 0, 0, 0, 0, 0, 0 };
