@@ -344,7 +344,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (progIn.subBlocks[i].content == "copy_ps1")
                     {
-                        List<int> mode = new List<int> { 2, 0, 0, 0 };
+                        List<int> mode = new List<int> { 1, 0, 0, 0 };
                         List<int> thisLine = new List<int> { 11 };
                         thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
@@ -354,7 +354,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (progIn.subBlocks[i].content == "copy_lstate")
                     {
-                        List<int> mode = new List<int> { 2, 0, 0, 0, 0, 0, 0 };
+                        List<int> mode = new List<int> { 1, 0, 0, 0, 0, 0, 0 };
                         List<int> thisLine = new List<int> { 12 };
                         thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
@@ -388,7 +388,7 @@ namespace Game_Dangerous_Editor
                     }
                     else if (progIn.subBlocks[i].content == "copy_ps0")
                     {
-                        List<int> mode = new List<int> { 2, 0, 0, 0 };
+                        List<int> mode = new List<int> { 1, 0, 0, 0 };
                         List<int> thisLine = new List<int> { 15 };
                         thisLine.AddRange(TransformArguments(progIn.subBlocks, progIn.bs, mode, errorLog, i));
                         codeBlock.AddRange(thisLine);
