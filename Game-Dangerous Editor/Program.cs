@@ -1,7 +1,9 @@
 ﻿// Game :: Dangerous Editor code by Steven Tinsley.  You are free to use this software and view its source code.
 // If you wish to redistribute it or use it as part of your own work, this is permitted as long as you acknowledge the work is by the abovementioned author.
 
-//This is the C# implementation of the GPLC compiler, designed to be equivalent to Game-Dangerous/assm_gplc.hs but with source code error reporting.
+// This is the C# implementation of the GPLC compiler.  See Mushy-pea/Game-Dangerous/GPLC Specification.odt for the language specification.
+// Also, note that the compiler was originally implemented in Haskell as Mushy-pea/Game-Dangerous/assm_gplc.hs but this implementation is now
+// considered legacy and is no longer updated.
 
 using System;
 using System.IO;
