@@ -188,7 +188,7 @@ namespace Game_Dangerous_Editor
             progGroup = new List<GPLCProgramOut>();
         }
 
-        public string GetProgramOut(bool patchFlag, List<int> header, List<GPLCSource> patchList, int n)
+        public string GetProgramOut(int n)
         {
             List<int> outputCode = new List<int>(progGroup[n].bytecode);
             string outputTokens = "";
@@ -588,102 +588,77 @@ namespace Game_Dangerous_Editor
     {
         static void Main(string[] args)
         {
-            List<string> testSet = new List<string> {"ActivateDefence",
-                                                     "Ammo",
-                                                     "BlueKey",
-                                                     "BulletPrototype",
-                                                     "CAU_Door",
-                                                     "CentipedeFrontNode",
-                                                     "CentipedeInnerNode",
-                                                     "CentipedeRearNode",
-                                                     "FireballPrototype",
-                                                     "Gem",
-                                                     "InitialScript1",
-                                                     "InitialScript2",
-                                                     "InitialScript2_1",
-                                                     "InitialScript3",
-                                                     "InterMapPortal",
-                                                     "LightTorch",
-                                                     "NPC_Gun",
-                                                     "NPC_Sarah",
-                                                     "PlayerGun",
-                                                     "Shooter",
-                                                     "StartTest",
-                                                     "Teleporter1",
-                                                     "Teleporter2",
-                                                     "Teleporter3",
-                                                     "TheEnd",
-                                                     "Torch",
-                                                     "UnblockTeleporter",
-                                                     "ZombieSmiley"}
-
-            int n = 0, i;
-            bool patchFlag;
-            List<GPLCSource> progName = new List<GPLCSource>();
-            List<GPLCSource> valueBlock = new List<GPLCSource>();
-            List<GPLCSource> codeBlock = new List<GPLCSource>();
-            List<Binding> bs = new List<Binding>();
-            List<string> errorLog = new List<string>();
-            string progNameString;
+            List<string> testSet = new List<string> {"ActivateDefence_",
+                                                     "Ammo_",
+                                                     "BlueKey_",
+                                                     "BulletPrototype_",
+                                                     "CAU_Door_",
+                                                     "CentipedeFrontNode_",
+                                                     "CentipedeInnerNode_",
+                                                     "CentipedeRearNode_",
+                                                     "FireballPrototype_",
+                                                     "Gem_",
+                                                     "InitialScript1_",
+                                                     "InitialScript2_1_",
+                                                     "InitialScript2_2_",
+                                                     "InitialScript3_",
+                                                     "InterMapPortal_",
+                                                     "LightTorch_",
+                                                     "NPC_Gun_",
+                                                     "NPC_Sarah_",
+                                                     "PlayerGun_",
+                                                     "Shooter_",
+                                                     "StartTest_",
+                                                     "Teleporter1_",
+                                                     "Teleporter2_",
+                                                     "Teleporter3_",
+                                                     "TheEnd_",
+                                                     "Torch_",
+                                                     "UnblockTeleporter_",
+                                                     "ZombieSmiley_"};
             GenerateBytecode programSet = new GenerateBytecode();
-            string source = File.ReadAllText(args[0]) + " ";
-            string structure = File.ReadAllText(args[1]) + " ";
-            List<GPLCSource> blocks = GPLCParser.Parser(source);
-            List<GPLCSource> structureBlocks = GPLCParser.Parser(structure);
-            List<GPLCSource> body = new List<GPLCSource>();
-            for (i = 0; i <= blocks.Count; i++)
-            {
-                if (n == 3 || i == blocks.Count)
+            string inputDir = "C:\\Users\\steve\\code\\GD\\GPLC-scripts-and-maps\\GPLC_Programs\\";
+            string outputDir = "C:\\Users\\steve\\code\\GD\\GPLC-scripts-and-maps\\CompilerOutput\\";
+
+            for (int j = 0; j <= 27; j++) {
+                List<GPLCSource> progName = new List<GPLCSource>();
+                List<GPLCSource> valueBlock = new List<GPLCSource>();
+                List<GPLCSource> codeBlock = new List<GPLCSource>();
+                List<Binding> bs = new List<Binding>();
+                List<string> errorLog = new List<string>();
+                string progNameString;
+                string sourceFile = inputDir + testSet[j] + ".gplc";
+                string source = File.ReadAllText(sourceFile) + " ";
+                List<GPLCSource> blocks = GPLCParser.Parser(source);
+                int n = 0;
+                for (int i = 0; i <= blocks.Count; i++)
                 {
-                    if (errorLog.Count > 0)
+                    if (i == blocks.Count)
                     {
-                        foreach (string error in errorLog) { Console.Write(error); }
-                        Console.Write("\n\nCompilation aborted at code block transformation stage.");
-                        Console.ReadLine();
-                        Environment.Exit(1);
-                    }
-                    Console.Write("\n\nCompiling program: ");
-                    progNameString = subBlocksToString(progName);
-                    Console.Write(progNameString);
-                    bs = ValueBinder.BindValues(valueBlock, ValueBinder.DetermineOffset(codeBlock), errorLog);
-                    GPLCProgramIn prog = new GPLCProgramIn(progNameString, codeBlock, bs);
-                    programSet.TransformProgram(prog, errorLog);
-                    if (i == blocks.Count) { break; }
-                    progName = new List<GPLCSource>();
-                    valueBlock = new List<GPLCSource>();
-                    codeBlock = new List<GPLCSource>();
-                    n = 0;
-                    i--;
-               }
-                else if (blocks[i].content == "~") { n++; }
-                else if (n == 0) { progName.Add(blocks[i]); }
-                else if (n == 1) { valueBlock.Add(blocks[i]); }
-                else { codeBlock.Add(blocks[i]); }
-            }
-            using (StreamWriter h = new StreamWriter(args[2]))
-            {
-                for (i = 0; i <= structureBlocks.Count; i++)
-                {
-                    if (i == structureBlocks.Count || structureBlocks[i].content == "~")
-                    {
-                        List<int> header = new List<int> { Convert.ToInt32(body[0].content), Convert.ToInt32(body[1].content), Convert.ToInt32(body[2].content), Convert.ToInt32(body[3].content) };
-                        if (body[4].content == "0")
+                        progNameString = subBlocksToString(progName);
+                        Console.Write("\nCompiling program " + progNameString + " from source file " + sourceFile);
+                        bs = ValueBinder.BindValues(valueBlock, ValueBinder.DetermineOffset(codeBlock), errorLog);
+                        GPLCProgramIn prog = new GPLCProgramIn(progNameString, codeBlock, bs);
+                        programSet.TransformProgram(prog, errorLog);
+                        i--;
+                        if (errorLog.Count > 0)
                         {
-                            h.Write(body[0].content + ", " + body[1].content + ", " + body[2].content + ", " + body[3].content + ", " + body[4].content + ", ");
+                            foreach (string error in errorLog) { Console.Write(error); }
+                            Console.Write("\n\nCompilation aborted at code block transformation stage.");
+                            Console.ReadLine();
+                            Environment.Exit(1);
                         }
-                        else
-                        {
-                            if (body[5].content == "n") { patchFlag = false; }
-                            else { patchFlag = true; }
-                            h.Write(programSet.GetProgramOut(patchFlag, header, body, Convert.ToInt32(body[4].content) - 1));
-                        }
-                        header = new List<int>();
-                        body = new List<GPLCSource>();
+                        break;
                     }
-                    else { body.Add(structureBlocks[i]); }
+                    else if (blocks[i].content == "~") { n++; }
+                    else if (n == 0) { progName.Add(blocks[i]); }
+                    else if (n == 1) { valueBlock.Add(blocks[i]); }
+                    else { codeBlock.Add(blocks[i]); }
+                }
+                using (StreamWriter h = new StreamWriter(outputDir + testSet[j] + ".out")) {
+                    h.Write(programSet.GetProgramOut(j));
                 }
             }
-            Console.ReadLine();
         }
 
         static string subBlocksToString(List<GPLCSource> subBlocks)
