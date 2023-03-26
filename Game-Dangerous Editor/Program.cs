@@ -210,7 +210,7 @@ namespace Game_Dangerous_Editor
             int offset = 0, blockSize = 0, i, n;
             List<int> sigBlock = new List<int>();
             List<int> codeBlock = new List<int>();
-            List<int> result = new List<int> { 0, 0, 0 };
+            List<int> result = new List<int>();
             string errorDetail;
             bool blockStart = true;
             for (i = 0; i < progIn.subBlocks.Count;)
@@ -379,9 +379,9 @@ namespace Game_Dangerous_Editor
                         for (n = 3; n <= SafeArgumentHandler.ReadLiteral(progIn.subBlocks[i + 1], errorLog, 1); n++)
                         {
                             thisLine.Add(SafeArgumentHandler.ReadLiteral(progIn.subBlocks[i + n], errorLog, 1));
-                            if (n % 16 == 0) { thisLine.Add(536870912); }
                         }
                         codeBlock.AddRange(thisLine);
+                        codeBlock.Add(536870912);
                         i = i + n;
                         offset = offset + n - 1;
                         blockSize = blockSize + n - 1;
@@ -534,9 +534,11 @@ namespace Game_Dangerous_Editor
             }
             List<int> dataBlock = new List<int>(AddDataBlock(progIn.bs));
             sigBlock.Add(blockSize);
-            sigBlock.Add(536870912);
-            result.AddRange(sigBlock); result.AddRange(codeBlock); result.AddRange(dataBlock);
-            result[0] = result.Count - 1;
+            result.AddRange(sigBlock);
+            result.Add(536870912);
+            result.AddRange(codeBlock);
+            result.Add(536870912);
+            result.AddRange(dataBlock);
             GPLCProgramOut thisProg = new GPLCProgramOut(progIn.progName, result, progIn.bs);
             progGroup.Add(thisProg);
         }
